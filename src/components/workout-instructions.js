@@ -65,6 +65,11 @@ class WorkoutInstructions extends HTMLElement {
       const instructions = workoutText.value;
       const parsedWorkout = this.parseInstructions(instructions);
       this.displayWorkout(parsedWorkout);
+      this.dispatchEvent(new CustomEvent('workoutParsed', {
+        detail: { steps: parsedWorkout },
+        bubbles: true,
+        composed: true
+      }));
     });
   }
 

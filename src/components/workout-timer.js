@@ -125,16 +125,25 @@ class WorkoutTimer extends HTMLElement {
     return duration.unit === 'minutes' ? duration.value * 60 : duration.value;
   }
 
-  startWorkout() {
+  async startWorkout() {
     if (this.workoutSteps.length === 0) return;
-    
+
+    // Request notification permission if not already granted
+    if ('Notification' in window && Notification.permission === 'default') {
+      try {
+        await Notification.requestPermission();
+      } catch (e) {
+        console.warn('Notification permission request failed:', e);
+      }
+    }
+
     this.currentStep = 0;
     this.startCurrentStep();
-    
+
     const startButton = this.shadowRoot.getElementById('startButton');
     const pauseButton = this.shadowRoot.getElementById('pauseButton');
     const stopButton = this.shadowRoot.getElementById('stopButton');
-    
+
     startButton.disabled = true;
     pauseButton.disabled = false;
     stopButton.disabled = false;
@@ -148,27 +157,59 @@ class WorkoutTimer extends HTMLElement {
     }
 
     this.timeRemaining = this.convertToSeconds(step.duration);
+    this.stepStartTime = Date.now();
+    this.expectedEndTime = this.stepStartTime + this.timeRemaining * 1000;
     this.updateDisplay();
-    
-    const currentActivity = this.shadowRoot.getElementById('currentActivity');
-    currentActivity.textContent = step.activity;
-    
+
+    // Send notification for new activity
+    if (step.activity && 'Notification' in window && Notification.permission === 'granted') {
+      const durationStr = step.duration.unit === 'minutes'
+        ? `${step.duration.value} minute${step.duration.value > 1 ? 's' : ''}`
+        : `${step.duration.value} second${step.duration.value > 1 ? 's' : ''}`;
+      const message = `${step.activity.trim()} for ${durationStr}`;
+      new Notification('Run PWA', {
+        body: message,
+        icon: '/android-chrome-192x192.png'
+      });
+
+      // Vibration (if supported)
+      if (navigator.vibrate) {
+        navigator.vibrate([300, 100, 300]);
+      }
+
+      // Speech synthesis (if supported)
+      if ('speechSynthesis' in window) {
+        const utter = new SpeechSynthesisUtterance(message);
+        utter.lang = 'en-US';
+        window.speechSynthesis.speak(utter);
+      }
+    }
+
     this.timer = setInterval(() => this.tick(), 1000);
+    this.handleVisibilityChangeBound = this.handleVisibilityChange.bind(this);
+    document.addEventListener('visibilitychange', this.handleVisibilityChangeBound);
   }
 
   tick() {
-    this.timeRemaining--;
+    const now = Date.now();
+    this.timeRemaining = Math.max(0, Math.round((this.expectedEndTime - now) / 1000));
     this.updateDisplay();
-    
     if (this.timeRemaining <= 0) {
       clearInterval(this.timer);
+      document.removeEventListener('visibilitychange', this.handleVisibilityChangeBound);
       this.currentStep++;
-      
       if (this.currentStep < this.workoutSteps.length) {
         this.startCurrentStep();
       } else {
         this.stopWorkout();
       }
+    }
+  }
+
+  handleVisibilityChange() {
+    if (!document.hidden) {
+      // When returning to the app, immediately update the timer
+      this.tick();
     }
   }
 
@@ -204,6 +245,9 @@ class WorkoutTimer extends HTMLElement {
   stopWorkout() {
     clearInterval(this.timer);
     this.timer = null;
+    if (this.handleVisibilityChangeBound) {
+      document.removeEventListener('visibilitychange', this.handleVisibilityChangeBound);
+    }
     
     const startButton = this.shadowRoot.getElementById('startButton');
     const pauseButton = this.shadowRoot.getElementById('pauseButton');
