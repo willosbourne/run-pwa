@@ -5,8 +5,12 @@ const ASSETS_TO_CACHE = [
   '/manifest.json',
   '/src/styles/main.css',
   '/src/app.js',
-  '/assets/icons/icon-192x192.png',
-  '/assets/icons/icon-512x512.png'
+  '/favicon.ico',
+  '/favicon-32x32.png',
+  '/favicon-16x16.png',
+  '/apple-touch-icon.png',
+  '/android-chrome-192x192.png',
+  '/android-chrome-512x512.png'
 ];
 
 // Install event - cache assets
