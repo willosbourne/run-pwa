@@ -279,6 +279,29 @@ class WorkoutTimer extends HTMLElement {
     currentActivity.textContent = 'Workout Complete';
     timerDisplay.textContent = '00:00';
     progressBar.style.width = '0%';
+
+    // Announce workout completion
+    if ('speechSynthesis' in window) {
+      const utter = new SpeechSynthesisUtterance('Workout complete! Great job!');
+      utter.lang = 'en-US';
+      utter.volume = 1.0;
+      utter.rate = 0.9;
+      utter.pitch = 1.0;
+      
+      // Debug log for speech synthesis
+      console.log('Announcing workout completion');
+      
+      utter.onstart = () => console.log('Completion announcement started');
+      utter.onend = () => console.log('Completion announcement ended');
+      utter.onerror = (event) => console.error('Completion announcement error:', event);
+      
+      window.speechSynthesis.speak(utter);
+    }
+
+    // Vibration for completion
+    if (navigator.vibrate) {
+      navigator.vibrate([300, 100, 300, 100, 300]); // Triple vibration for completion
+    }
   }
 }
 
