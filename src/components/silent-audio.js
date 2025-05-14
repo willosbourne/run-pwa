@@ -6,11 +6,12 @@ class SilentAudio extends HTMLElement {
     this.oscillator = null;
     this.gainNode = null;
     this.isInitialized = false;
+    this.initializationAttempts = 0;
+    this.maxAttempts = 3;
   }
 
   connectedCallback() {
     this.render();
-    // Don't initialize audio immediately - wait for user interaction
     this.setupEventListeners();
   }
 
@@ -31,73 +32,91 @@ class SilentAudio extends HTMLElement {
   setupEventListeners() {
     // Listen for the start of a workout
     document.addEventListener('workoutStarted', () => {
-      if (!this.isInitialized) {
-        this.initializeAudio();
-      } else {
-        this.resumeAudio();
-      }
+      this.attemptInitializeAudio();
     });
 
-    // Also initialize on any click in the document
-    document.addEventListener('click', () => {
-      if (!this.isInitialized) {
-        this.initializeAudio();
-      }
-    }, { once: true });
+    // Listen for any user interaction
+    const userInteractionEvents = ['click', 'touchstart', 'keydown'];
+    userInteractionEvents.forEach(eventType => {
+      document.addEventListener(eventType, () => {
+        this.attemptInitializeAudio();
+      }, { once: true });
+    });
   }
 
-  async initializeAudio() {
+  async attemptInitializeAudio() {
+    if (this.isInitialized || this.initializationAttempts >= this.maxAttempts) return;
+    
+    this.initializationAttempts++;
+    console.log(`Attempting to initialize audio (attempt ${this.initializationAttempts})`);
+
     try {
-      if (this.isInitialized) return;
+      if (!this.audioContext) {
+        this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      }
 
-      this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-      this.oscillator = this.audioContext.createOscillator();
-      this.gainNode = this.audioContext.createGain();
+      // Resume the context if it's suspended
+      if (this.audioContext.state === 'suspended') {
+        await this.audioContext.resume();
+      }
 
-      // Set up a very low frequency (1 Hz) and volume
-      this.oscillator.type = 'sine';
-      this.oscillator.frequency.setValueAtTime(1, this.audioContext.currentTime);
-      
-      // Set gain to a very low value (effectively silent)
-      this.gainNode.gain.setValueAtTime(0.0001, this.audioContext.currentTime);
+      if (!this.oscillator) {
+        this.oscillator = this.audioContext.createOscillator();
+        this.gainNode = this.audioContext.createGain();
 
-      // Connect the nodes
-      this.oscillator.connect(this.gainNode);
-      this.gainNode.connect(this.audioContext.destination);
+        // Set up a very low frequency (1 Hz) and volume
+        this.oscillator.type = 'sine';
+        this.oscillator.frequency.setValueAtTime(1, this.audioContext.currentTime);
+        
+        // Set gain to a very low value (effectively silent)
+        this.gainNode.gain.setValueAtTime(0.0001, this.audioContext.currentTime);
 
-      // Start the oscillator
-      this.oscillator.start();
+        // Connect the nodes
+        this.oscillator.connect(this.gainNode);
+        this.gainNode.connect(this.audioContext.destination);
+
+        // Start the oscillator
+        this.oscillator.start();
+      }
+
       this.isInitialized = true;
-
       console.log('Silent audio initialized successfully');
     } catch (error) {
       console.error('Error initializing silent audio:', error);
-    }
-  }
-
-  async resumeAudio() {
-    if (this.audioContext && this.audioContext.state === 'suspended') {
-      try {
-        await this.audioContext.resume();
-        console.log('Audio context resumed');
-      } catch (error) {
-        console.error('Error resuming audio context:', error);
-      }
+      
+      // If initialization fails, try again on next user interaction
+      this.isInitialized = false;
+      this.audioContext = null;
+      this.oscillator = null;
+      this.gainNode = null;
     }
   }
 
   stopAudio() {
     if (this.oscillator) {
-      this.oscillator.stop();
-      this.oscillator.disconnect();
+      try {
+        this.oscillator.stop();
+        this.oscillator.disconnect();
+      } catch (e) {
+        console.warn('Error stopping oscillator:', e);
+      }
     }
     if (this.gainNode) {
-      this.gainNode.disconnect();
+      try {
+        this.gainNode.disconnect();
+      } catch (e) {
+        console.warn('Error disconnecting gain node:', e);
+      }
     }
     if (this.audioContext) {
-      this.audioContext.close();
+      try {
+        this.audioContext.close();
+      } catch (e) {
+        console.warn('Error closing audio context:', e);
+      }
     }
     this.isInitialized = false;
+    this.initializationAttempts = 0;
   }
 }
 
