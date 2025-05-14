@@ -7,9 +7,13 @@ class LocationTracker extends HTMLElement {
     this.currentWorkoutSteps = [];
     this.currentStepIndex = 0;
     this.isTracking = false;
+    this.lastUpdateTime = 0;
+    this.updateInterval = 1000; // 1 second between updates
+    console.log('LocationTracker initialized');
   }
 
   connectedCallback() {
+    console.log('LocationTracker connected to DOM');
     this.render();
     this.setupEventListeners();
   }
@@ -50,35 +54,65 @@ class LocationTracker extends HTMLElement {
   }
 
   setupEventListeners() {
-    document.addEventListener('workoutStarted', () => this.startTracking());
-    document.addEventListener('workoutStopped', () => this.stopTracking());
+    console.log('Setting up LocationTracker event listeners');
+    document.addEventListener('workoutStarted', () => {
+      console.log('Workout started event received');
+      this.startTracking();
+    });
+    document.addEventListener('workoutStopped', () => {
+      console.log('Workout stopped event received');
+      this.stopTracking();
+    });
     document.addEventListener('workoutStepChanged', (e) => {
+      console.log('Workout step changed:', e.detail.stepIndex);
       this.currentStepIndex = e.detail.stepIndex;
       this.updateStepDistances();
     });
   }
 
-  startTracking() {
+  async startTracking() {
     if (!navigator.geolocation) {
       console.error('Geolocation is not supported by your browser');
       return;
     }
 
-    this.isTracking = true;
-    this.locations = [];
-    this.currentStepIndex = 0;
+    try {
+      // First, get the current position to trigger the permission prompt
+      await new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 5000,
+          maximumAge: 0
+        });
+      });
 
-    const options = {
-      enableHighAccuracy: true,
-      maximumAge: 0,
-      timeout: 5000
-    };
+      this.isTracking = true;
+      this.locations = [];
+      this.currentStepIndex = 0;
+      this.lastUpdateTime = Date.now();
 
-    this.watchId = navigator.geolocation.watchPosition(
-      (position) => this.handleNewPosition(position),
-      (error) => console.error('Error getting location:', error),
-      options
-    );
+      const options = {
+        enableHighAccuracy: true,
+        maximumAge: 0,
+        timeout: 10000 // Increased timeout to ensure we get updates
+      };
+
+      this.watchId = navigator.geolocation.watchPosition(
+        (position) => this.handleNewPosition(position),
+        (error) => {
+          console.error('Error getting location:', error);
+          if (error.code === error.PERMISSION_DENIED) {
+            console.error('Geolocation permission denied');
+          }
+        },
+        options
+      );
+    } catch (error) {
+      console.error('Error starting location tracking:', error);
+      if (error.code === error.PERMISSION_DENIED) {
+        console.error('Geolocation permission denied');
+      }
+    }
   }
 
   stopTracking() {
@@ -93,15 +127,41 @@ class LocationTracker extends HTMLElement {
   handleNewPosition(position) {
     if (!this.isTracking) return;
 
-    const newLocation = {
-      latitude: position.coords.latitude,
-      longitude: position.coords.longitude,
-      timestamp: position.timestamp,
-      stepIndex: this.currentStepIndex
-    };
+    const currentTime = Date.now();
+    // Only record position if enough time has passed since last update
+    if (currentTime - this.lastUpdateTime >= this.updateInterval) {
+      const newLocation = {
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+        timestamp: currentTime,
+        stepIndex: this.currentStepIndex,
+        accuracy: position.coords.accuracy // Store accuracy for potential filtering
+      };
 
-    this.locations.push(newLocation);
-    this.updateTotalDistance();
+      // Only add the location if it's significantly different from the last one
+      // This helps filter out GPS jitter while still capturing real movement
+      if (this.shouldRecordLocation(newLocation)) {
+        this.locations.push(newLocation);
+        this.lastUpdateTime = currentTime;
+        this.updateTotalDistance();
+      }
+    }
+  }
+
+  shouldRecordLocation(newLocation) {
+    if (this.locations.length === 0) return true;
+
+    const lastLocation = this.locations[this.locations.length - 1];
+    const distance = this.calculateDistance(
+      lastLocation.latitude,
+      lastLocation.longitude,
+      newLocation.latitude,
+      newLocation.longitude
+    );
+
+    // Only record if moved more than 1 meter (0.001 km)
+    // This helps filter out GPS jitter while still capturing real movement
+    return distance > 0.001;
   }
 
   calculateDistance(lat1, lon1, lat2, lon2) {
