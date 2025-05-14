@@ -170,21 +170,50 @@ class WorkoutTimer extends HTMLElement {
         ? `${step.duration.value} minute${step.duration.value > 1 ? 's' : ''}`
         : `${step.duration.value} second${step.duration.value > 1 ? 's' : ''}`;
       const message = `${step.activity.trim()} for ${durationStr}`;
-      new Notification('Run PWA', {
-        body: message,
-        icon: '/android-chrome-192x192.png'
-      });
+      
+      // Debug log
+      console.log('Attempting to play audio for:', message);
+
+      // Play a test sound first
+      if ('AudioContext' in window || 'webkitAudioContext' in window) {
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+        
+        oscillator.type = 'sine';
+        oscillator.frequency.setValueAtTime(440, audioContext.currentTime); // A4 note
+        gainNode.gain.setValueAtTime(0.5, audioContext.currentTime); // 50% volume
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+        
+        oscillator.start();
+        oscillator.stop(audioContext.currentTime + 0.5); // Play for 0.5 seconds
+      }
+
+      // Speech synthesis with enhanced settings
+      if ('speechSynthesis' in window) {
+        const utter = new SpeechSynthesisUtterance(message);
+        utter.lang = 'en-US';
+        utter.volume = 1.0; // Maximum volume
+        utter.rate = 0.9; // Slightly slower for clarity
+        utter.pitch = 1.0;
+        
+        // Debug log for speech synthesis
+        console.log('Speech synthesis available, attempting to speak');
+        
+        utter.onstart = () => console.log('Speech started');
+        utter.onend = () => console.log('Speech ended');
+        utter.onerror = (event) => console.error('Speech error:', event);
+        
+        window.speechSynthesis.speak(utter);
+      } else {
+        console.warn('Speech synthesis not available');
+      }
 
       // Vibration (if supported)
       if (navigator.vibrate) {
         navigator.vibrate([300, 100, 300]);
-      }
-
-      // Speech synthesis (if supported)
-      if ('speechSynthesis' in window) {
-        const utter = new SpeechSynthesisUtterance(message);
-        utter.lang = 'en-US';
-        window.speechSynthesis.speak(utter);
       }
     }
 

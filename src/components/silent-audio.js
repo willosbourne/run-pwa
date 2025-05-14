@@ -30,8 +30,11 @@ class SilentAudio extends HTMLElement {
   }
 
   setupEventListeners() {
+    console.log('Setting up silent-audio event listeners');
+    
     // Listen for the start of a workout
     document.addEventListener('workoutStarted', () => {
+      console.log('Workout started event received');
       this.attemptInitializeAudio();
     });
 
@@ -39,44 +42,56 @@ class SilentAudio extends HTMLElement {
     const userInteractionEvents = ['click', 'touchstart', 'keydown'];
     userInteractionEvents.forEach(eventType => {
       document.addEventListener(eventType, () => {
+        console.log(`User interaction (${eventType}) received`);
         this.attemptInitializeAudio();
       }, { once: true });
     });
   }
 
   async attemptInitializeAudio() {
-    if (this.isInitialized || this.initializationAttempts >= this.maxAttempts) return;
+    if (this.isInitialized || this.initializationAttempts >= this.maxAttempts) {
+      console.log(`Skipping audio initialization: isInitialized=${this.isInitialized}, attempts=${this.initializationAttempts}`);
+      return;
+    }
     
     this.initializationAttempts++;
     console.log(`Attempting to initialize audio (attempt ${this.initializationAttempts})`);
 
     try {
       if (!this.audioContext) {
+        console.log('Creating new AudioContext');
         this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
       }
 
       // Resume the context if it's suspended
       if (this.audioContext.state === 'suspended') {
+        console.log('AudioContext is suspended, attempting to resume');
         await this.audioContext.resume();
+        console.log('AudioContext resumed, new state:', this.audioContext.state);
       }
 
       if (!this.oscillator) {
+        console.log('Creating new oscillator and gain node');
         this.oscillator = this.audioContext.createOscillator();
         this.gainNode = this.audioContext.createGain();
 
-        // Set up a very low frequency (1 Hz) and volume
+        // Set up a more audible frequency and volume for debugging
         this.oscillator.type = 'sine';
-        this.oscillator.frequency.setValueAtTime(1, this.audioContext.currentTime);
+        this.oscillator.frequency.setValueAtTime(220, this.audioContext.currentTime); // A3 note
+        console.log('Set oscillator frequency to 220 Hz');
         
-        // Set gain to a very low value (effectively silent)
-        this.gainNode.gain.setValueAtTime(0.0001, this.audioContext.currentTime);
+        // Set gain to an audible level for debugging
+        this.gainNode.gain.setValueAtTime(0.1, this.audioContext.currentTime);
+        console.log('Set gain to 0.1 (10% volume)');
 
         // Connect the nodes
         this.oscillator.connect(this.gainNode);
         this.gainNode.connect(this.audioContext.destination);
+        console.log('Connected audio nodes');
 
         // Start the oscillator
         this.oscillator.start();
+        console.log('Started audible sine wave for debugging');
       }
 
       this.isInitialized = true;
