@@ -159,6 +159,11 @@ class WorkoutTimer extends HTMLElement {
       return;
     }
 
+    // Dispatch step change event
+    document.dispatchEvent(new CustomEvent('workoutStepChanged', {
+      detail: { stepIndex: this.currentStep }
+    }));
+
     this.timeRemaining = this.convertToSeconds(step.duration);
     this.stepStartTime = Date.now();
     this.expectedEndTime = this.stepStartTime + this.timeRemaining * 1000;
@@ -263,6 +268,9 @@ class WorkoutTimer extends HTMLElement {
     if (this.handleVisibilityChangeBound) {
       document.removeEventListener('visibilitychange', this.handleVisibilityChangeBound);
     }
+    
+    // Dispatch workout stopped event
+    document.dispatchEvent(new CustomEvent('workoutStopped'));
     
     const startButton = this.shadowRoot.getElementById('startButton');
     const pauseButton = this.shadowRoot.getElementById('pauseButton');
