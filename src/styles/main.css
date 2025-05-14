@@ -1,11 +1,13 @@
 :root {
   /* Colors */
-  --primary-color: #007AFF;
-  --secondary-color: #5856D6;
+  --primary-color: #35542B;
+  --primary-light: #4A7239;
+  --primary-dark: #2A4121;
+  --secondary-color: #8B9D77;
   --background-color: #ffffff;
-  --text-color: #000000;
-  --error-color: #FF3B30;
-  --success-color: #34C759;
+  --text-color: #2C2C2C;
+  --error-color: #D32F2F;
+  --success-color: #388E3C;
   
   /* Spacing */
   --spacing-xs: 0.25rem;
@@ -25,8 +27,11 @@
 /* Dark mode */
 @media (prefers-color-scheme: dark) {
   :root {
-    --background-color: #000000;
-    --text-color: #ffffff;
+    --background-color: #1A1A1A;
+    --text-color: #E0E0E0;
+    --primary-color: #4A7239;
+    --primary-light: #5C8A47;
+    --primary-dark: #35542B;
   }
 }
 
@@ -65,7 +70,8 @@ footer {
   padding: var(--spacing-md);
   text-align: center;
   background-color: var(--background-color);
-  border-top: 1px solid rgba(0, 0, 0, 0.1);
+  border-top: 1px solid var(--primary-color);
+  color: var(--text-color);
 }
 
 /* Utility classes */
