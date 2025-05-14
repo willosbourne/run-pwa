@@ -91,7 +91,7 @@ class WorkoutInstructions extends HTMLElement {
       } else {
         // Handle regular steps
         const duration = this.extractDuration(part);
-        const activity = part.replace(/\d+\s*(min|s|sec|seconds?|minutes?)/g, '').trim();
+        const activity = part.replace(/\d+\s*(m|min|s|sec|seconds?|minutes?)/g, '').trim();
         
         if (duration && activity) {
           steps.push({
@@ -107,12 +107,12 @@ class WorkoutInstructions extends HTMLElement {
   }
 
   extractDuration(text) {
-    const timeRegex = /(\d+)\s*(min|s|sec|seconds?|minutes?)/;
+    const timeRegex = /(\d+)\s*(m|min|s|sec|seconds?|minutes?)/;
     const match = text.match(timeRegex);
     
     if (match) {
       const value = parseInt(match[1]);
-      const unit = match[2].startsWith('min') ? 'minutes' : 'seconds';
+      const unit = match[2].startsWith('m') ? 'minutes' : 'seconds';
       return { value, unit };
     }
     
