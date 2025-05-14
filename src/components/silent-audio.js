@@ -8,6 +8,7 @@ class SilentAudio extends HTMLElement {
     this.isInitialized = false;
     this.initializationAttempts = 0;
     this.maxAttempts = 3;
+    this.audioElement = null;
   }
 
   connectedCallback() {
@@ -26,6 +27,7 @@ class SilentAudio extends HTMLElement {
           display: none;
         }
       </style>
+      <audio id="silentAudio" loop></audio>
     `;
   }
 
@@ -46,6 +48,14 @@ class SilentAudio extends HTMLElement {
         this.attemptInitializeAudio();
       }, { once: true });
     });
+
+    // Handle visibility changes
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden && this.audioContext?.state === 'suspended') {
+        console.log('Resuming audio after visibility change');
+        this.audioContext.resume();
+      }
+    });
   }
 
   async attemptInitializeAudio() {
@@ -58,9 +68,29 @@ class SilentAudio extends HTMLElement {
     console.log(`Attempting to initialize audio (attempt ${this.initializationAttempts})`);
 
     try {
+      // Set up audio session for iOS
+      if (window.webkit?.messageHandlers?.audioSession) {
+        console.log('Setting up iOS audio session');
+        window.webkit.messageHandlers.audioSession.postMessage({
+          category: 'playback',
+          options: ['mixWithOthers', 'duckOthers']
+        });
+      }
+
+      // Create audio element for iOS background audio
+      if (!this.audioElement) {
+        this.audioElement = this.shadowRoot.getElementById('silentAudio');
+        this.audioElement.setAttribute('playsinline', '');
+        this.audioElement.setAttribute('webkit-playsinline', '');
+      }
+
       if (!this.audioContext) {
         console.log('Creating new AudioContext');
-        this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        this.audioContext = new AudioContext({
+          latencyHint: 'interactive',
+          sampleRate: 44100
+        });
       }
 
       // Resume the context if it's suspended
@@ -92,6 +122,13 @@ class SilentAudio extends HTMLElement {
         // Start the oscillator
         this.oscillator.start();
         console.log('Started audible sine wave for debugging');
+
+        // For iOS, also start the audio element
+        if (this.audioElement) {
+          this.audioElement.play().catch(e => {
+            console.warn('Error playing audio element:', e);
+          });
+        }
       }
 
       this.isInitialized = true;
@@ -128,6 +165,13 @@ class SilentAudio extends HTMLElement {
         this.audioContext.close();
       } catch (e) {
         console.warn('Error closing audio context:', e);
+      }
+    }
+    if (this.audioElement) {
+      try {
+        this.audioElement.pause();
+      } catch (e) {
+        console.warn('Error pausing audio element:', e);
       }
     }
     this.isInitialized = false;
