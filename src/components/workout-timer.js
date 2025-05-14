@@ -174,23 +174,6 @@ class WorkoutTimer extends HTMLElement {
       // Debug log
       console.log('Attempting to play audio for:', message);
 
-      // Play a test sound first
-      if ('AudioContext' in window || 'webkitAudioContext' in window) {
-        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        const oscillator = audioContext.createOscillator();
-        const gainNode = audioContext.createGain();
-        
-        oscillator.type = 'sine';
-        oscillator.frequency.setValueAtTime(440, audioContext.currentTime); // A4 note
-        gainNode.gain.setValueAtTime(0.5, audioContext.currentTime); // 50% volume
-        
-        oscillator.connect(gainNode);
-        gainNode.connect(audioContext.destination);
-        
-        oscillator.start();
-        oscillator.stop(audioContext.currentTime + 0.5); // Play for 0.5 seconds
-      }
-
       // Speech synthesis with enhanced settings
       if ('speechSynthesis' in window) {
         const utter = new SpeechSynthesisUtterance(message);
