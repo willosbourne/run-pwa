@@ -5,11 +5,13 @@ class SilentAudio extends HTMLElement {
     this.audioContext = null;
     this.oscillator = null;
     this.gainNode = null;
+    this.isInitialized = false;
   }
 
   connectedCallback() {
     this.render();
-    this.initializeAudio();
+    // Don't initialize audio immediately - wait for user interaction
+    this.setupEventListeners();
   }
 
   disconnectedCallback() {
@@ -26,8 +28,28 @@ class SilentAudio extends HTMLElement {
     `;
   }
 
+  setupEventListeners() {
+    // Listen for the start of a workout
+    document.addEventListener('workoutStarted', () => {
+      if (!this.isInitialized) {
+        this.initializeAudio();
+      } else {
+        this.resumeAudio();
+      }
+    });
+
+    // Also initialize on any click in the document
+    document.addEventListener('click', () => {
+      if (!this.isInitialized) {
+        this.initializeAudio();
+      }
+    }, { once: true });
+  }
+
   async initializeAudio() {
     try {
+      if (this.isInitialized) return;
+
       this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
       this.oscillator = this.audioContext.createOscillator();
       this.gainNode = this.audioContext.createGain();
@@ -45,8 +67,22 @@ class SilentAudio extends HTMLElement {
 
       // Start the oscillator
       this.oscillator.start();
+      this.isInitialized = true;
+
+      console.log('Silent audio initialized successfully');
     } catch (error) {
       console.error('Error initializing silent audio:', error);
+    }
+  }
+
+  async resumeAudio() {
+    if (this.audioContext && this.audioContext.state === 'suspended') {
+      try {
+        await this.audioContext.resume();
+        console.log('Audio context resumed');
+      } catch (error) {
+        console.error('Error resuming audio context:', error);
+      }
     }
   }
 
@@ -61,6 +97,7 @@ class SilentAudio extends HTMLElement {
     if (this.audioContext) {
       this.audioContext.close();
     }
+    this.isInitialized = false;
   }
 }
 

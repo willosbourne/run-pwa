@@ -137,6 +137,9 @@ class WorkoutTimer extends HTMLElement {
       }
     }
 
+    // Dispatch workoutStarted event
+    document.dispatchEvent(new CustomEvent('workoutStarted'));
+
     this.currentStep = 0;
     this.startCurrentStep();
 
