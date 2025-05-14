@@ -19,8 +19,15 @@ class WorkoutInstructions extends HTMLElement {
         
         .workout-input {
           display: flex;
+          flex-direction: column;
           gap: var(--spacing-md);
           margin-bottom: var(--spacing-md);
+        }
+        
+        @media (min-width: 768px) {
+          .workout-input {
+            flex-direction: row;
+          }
         }
         
         .workout-display {
