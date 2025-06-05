@@ -7,6 +7,7 @@ class WorkoutTimer extends HTMLElement {
     this.timer = null;
     this.workoutSteps = [];
     this.wakeLock = null;
+    this.wakeLockEnabled = true;
   }
 
   connectedCallback() {
@@ -74,6 +75,12 @@ class WorkoutTimer extends HTMLElement {
           <sl-button variant="neutral" id="pauseButton" disabled>Pause</sl-button>
           <sl-button variant="danger" id="stopButton" disabled>Stop</sl-button>
         </div>
+        <div class="wake-lock-controls" style="display: flex; justify-content: center; margin-top: var(--spacing-md);">
+          <sl-button variant="neutral" id="wakeLockButton">
+            <sl-icon name="display" slot="prefix"></sl-icon>
+            Wake Lock: On
+          </sl-button>
+        </div>
       </div>
     `;
 
@@ -84,10 +91,12 @@ class WorkoutTimer extends HTMLElement {
     const startButton = this.shadowRoot.getElementById('startButton');
     const pauseButton = this.shadowRoot.getElementById('pauseButton');
     const stopButton = this.shadowRoot.getElementById('stopButton');
+    const wakeLockButton = this.shadowRoot.getElementById('wakeLockButton');
 
     startButton.addEventListener('click', () => this.startWorkout());
     pauseButton.addEventListener('click', () => this.togglePause());
     stopButton.addEventListener('click', () => this.stopWorkout());
+    wakeLockButton.addEventListener('click', () => this.toggleWakeLock());
   }
 
   setWorkoutSteps(steps) {
@@ -127,18 +136,36 @@ class WorkoutTimer extends HTMLElement {
   }
 
   async requestWakeLock() {
+    // Only request wake lock if it's enabled
+    if (!this.wakeLockEnabled) {
+      console.log('Wake lock is disabled by user');
+      return false;
+    }
+
     if ('wakeLock' in navigator) {
       try {
         this.wakeLock = await navigator.wakeLock.request('screen');
         console.log('Wake lock acquired');
+
+        // Update button text
+        const wakeLockButton = this.shadowRoot.getElementById('wakeLockButton');
+        if (wakeLockButton) {
+          wakeLockButton.innerHTML = '<sl-icon name="display" slot="prefix"></sl-icon> Wake Lock: On';
+        }
 
         // Add event listener for wake lock release
         this.wakeLock.addEventListener('release', () => {
           console.log('Wake lock released by system');
           this.wakeLock = null;
 
-          // Try to re-acquire wake lock if timer is still running
-          if (this.timer) {
+          // Update button text
+          const wakeLockButton = this.shadowRoot.getElementById('wakeLockButton');
+          if (wakeLockButton) {
+            wakeLockButton.innerHTML = '<sl-icon name="display-fill" slot="prefix"></sl-icon> Wake Lock: Off';
+          }
+
+          // Try to re-acquire wake lock if timer is still running and wake lock is enabled
+          if (this.timer && this.wakeLockEnabled) {
             this.requestWakeLock();
           }
         });
@@ -165,8 +192,10 @@ class WorkoutTimer extends HTMLElement {
       }
     }
 
-    // Request wake lock to keep screen on during workout
-    await this.requestWakeLock();
+    // Request wake lock to keep screen on during workout if wake lock is enabled
+    if (this.wakeLockEnabled) {
+      await this.requestWakeLock();
+    }
 
     // Dispatch workoutStarted event
     document.dispatchEvent(new CustomEvent('workoutStarted'));
@@ -262,8 +291,8 @@ class WorkoutTimer extends HTMLElement {
       // When returning to the app, immediately update the timer
       this.tick();
 
-      // Re-acquire wake lock if it was released when document became hidden
-      if (this.timer && !this.wakeLock) {
+      // Re-acquire wake lock if it was released when document became hidden and wake lock is enabled
+      if (this.timer && !this.wakeLock && this.wakeLockEnabled) {
         await this.requestWakeLock();
       }
     }
@@ -302,13 +331,43 @@ class WorkoutTimer extends HTMLElement {
       const pauseButton = this.shadowRoot.getElementById('pauseButton');
       pauseButton.textContent = 'Resume';
     } else {
-      // Re-acquire wake lock when resumed
-      await this.requestWakeLock();
+      // Re-acquire wake lock when resumed if wake lock is enabled
+      if (this.wakeLockEnabled) {
+        await this.requestWakeLock();
+      }
 
       this.timer = setInterval(() => this.tick(), 1000);
 
       const pauseButton = this.shadowRoot.getElementById('pauseButton');
       pauseButton.textContent = 'Pause';
+    }
+  }
+
+  async toggleWakeLock() {
+    this.wakeLockEnabled = !this.wakeLockEnabled;
+    const wakeLockButton = this.shadowRoot.getElementById('wakeLockButton');
+
+    if (!this.wakeLockEnabled && this.wakeLock) {
+      // Disable wake lock
+      try {
+        await this.wakeLock.release();
+        this.wakeLock = null;
+        console.log('Wake lock manually released');
+        wakeLockButton.innerHTML = '<sl-icon name="display-fill" slot="prefix"></sl-icon> Wake Lock: Off';
+      } catch (e) {
+        console.error('Error releasing wake lock:', e);
+      }
+    } else if (this.wakeLockEnabled && this.timer && !this.wakeLock) {
+      // Enable wake lock if timer is running
+      const success = await this.requestWakeLock();
+      if (success) {
+        wakeLockButton.innerHTML = '<sl-icon name="display" slot="prefix"></sl-icon> Wake Lock: On';
+      }
+    } else {
+      // Just update the button text
+      wakeLockButton.innerHTML = this.wakeLockEnabled 
+        ? '<sl-icon name="display" slot="prefix"></sl-icon> Wake Lock: On'
+        : '<sl-icon name="display-fill" slot="prefix"></sl-icon> Wake Lock: Off';
     }
   }
 
