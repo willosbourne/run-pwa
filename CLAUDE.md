@@ -10,6 +10,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `npm run lint` - Run ESLint on src/**/*.js files
 - `npm run test` - Run Jest tests
 
+## GitHub Issue Management
+
+- `gh issue list` - List all open issues
+- `gh issue view <number>` - View detailed information about a specific issue (e.g., `gh issue view 1`)
+- `gh issue create` - Create a new issue
+- `gh issue close <number>` - Close an issue
+- `gh issue comment <number>` - Add a comment to an issue
+
+When the user refers to "issue #X" or "lets work on issue #X", use `gh issue view X` to get the full context and requirements.
+
 ## Architecture Overview
 
 This is a Progressive Web App (PWA) for tracking running workouts, built with vanilla JavaScript and Web Components.
