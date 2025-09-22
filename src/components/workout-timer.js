@@ -125,28 +125,37 @@ class WorkoutTimer extends HTMLElement {
 
   expandWorkoutSteps(steps) {
     const expandedSteps = [];
-    let currentSteps = [];
 
     steps.forEach(step => {
       if (step.type === 'activity') {
-        currentSteps.push(step);
-      } else if (step.type === 'repeat') {
-        const repeatDuration = this.convertToSeconds(step.duration);
-        const currentStepsDuration = currentSteps.reduce((total, step) => 
-          total + this.convertToSeconds(step.duration), 0);
-
-        const repeats = Math.ceil(repeatDuration / currentStepsDuration);
-
-        for (let i = 0; i < repeats; i++) {
-          expandedSteps.push(...currentSteps);
+        // Add activity step directly
+        expandedSteps.push(step);
+      } else if (step.type === 'repeat-count') {
+        // Repeat the specified steps X times
+        if (step.stepsToRepeat && step.stepsToRepeat.length > 0) {
+          for (let i = 0; i < step.count; i++) {
+            expandedSteps.push(...step.stepsToRepeat);
+          }
         }
+      } else if (step.type === 'repeat-duration') {
+        // Repeat the specified steps until duration is met
+        if (step.stepsToRepeat && step.stepsToRepeat.length > 0) {
+          const repeatDuration = this.convertToSeconds(step.duration);
+          const stepsDuration = step.stepsToRepeat.reduce((total, s) =>
+            total + this.convertToSeconds(s.duration), 0);
 
-        currentSteps = [];
+          if (stepsDuration > 0) {
+            const repeats = Math.ceil(repeatDuration / stepsDuration);
+            for (let i = 0; i < repeats; i++) {
+              expandedSteps.push(...step.stepsToRepeat);
+            }
+          }
+        }
+      } else if (step.type === 'repeat') {
+        // Legacy support for old repeat format
+        console.warn('Legacy repeat format detected, please update workout instructions');
       }
     });
-
-    // Add any remaining steps
-    expandedSteps.push(...currentSteps);
 
     return expandedSteps;
   }
@@ -237,6 +246,12 @@ class WorkoutTimer extends HTMLElement {
     if (!step) {
       this.stopWorkout();
       return;
+    }
+
+    // Update current activity display
+    const currentActivity = this.shadowRoot.getElementById('currentActivity');
+    if (currentActivity && step.activity) {
+      currentActivity.textContent = step.activity;
     }
 
     // Dispatch step change event
