@@ -13,6 +13,26 @@ class WorkoutInstructions extends HTMLElement {
     this.shadowRoot.innerHTML = `
       <style>
         :host {
+          /* Import CSS variables from parent document */
+          --primary-color: #35542B;
+          --primary-light: #4A7239;
+          --primary-dark: #2A4121;
+          --secondary-color: #8B9D77;
+          --background-color: #ffffff;
+          --text-color: #2C2C2C;
+          --error-color: #D32F2F;
+          --success-color: #388E3C;
+          --spacing-xs: 0.25rem;
+          --spacing-sm: 0.5rem;
+          --spacing-md: 1rem;
+          --spacing-lg: 1.5rem;
+          --spacing-xl: 2rem;
+          --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+          --font-size-sm: 0.875rem;
+          --font-size-md: 1rem;
+          --font-size-lg: 1.25rem;
+          --font-size-xl: 1.5rem;
+
           display: block;
           padding: var(--spacing-md);
         }
