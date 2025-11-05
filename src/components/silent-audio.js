@@ -15,6 +15,7 @@ class SilentAudio extends HTMLElement {
   }
 
   connectedCallback() {
+    console.log('🔊 SilentAudio component connected');
     this.render();
     this.setupEventListeners();
   }
@@ -35,18 +36,21 @@ class SilentAudio extends HTMLElement {
   }
 
   setupEventListeners() {
-    console.log('Setting up silent-audio event listeners');
+    console.log('🔊 Setting up silent-audio event listeners');
 
     // Listen for workout parsed to get all steps
     document.addEventListener('workoutParsed', (event) => {
-      console.log('Workout parsed event received');
+      console.log('🔊 Workout parsed event received, steps:', event.detail.steps);
       this.workoutSteps = event.detail.steps || [];
+      console.log('🔊 Stored workout steps:', this.workoutSteps);
     });
 
     // Listen for the start of a workout
     document.addEventListener('workoutStarted', () => {
-      console.log('Workout started event received');
+      console.log('🔊 ✅ WORKOUT STARTED EVENT RECEIVED!');
+      console.log('🔊 Current workout steps:', this.workoutSteps);
       this.currentStep = 0;
+      console.log('🔊 About to attempt audio initialization...');
       this.attemptInitializeAudio();
     });
 
@@ -179,22 +183,44 @@ class SilentAudio extends HTMLElement {
    * Play audio for the current workout step
    */
   async playStepAudio() {
+    console.log('🔊 playStepAudio called');
+    console.log('🔊 audioContext exists:', !!this.audioContext);
+    console.log('🔊 audioElement exists:', !!this.audioElement);
+    console.log('🔊 currentStep:', this.currentStep);
+    console.log('🔊 workoutSteps length:', this.workoutSteps.length);
+
     if (!this.audioContext || !this.audioElement || this.currentStep === null) {
-      console.log('Cannot play step audio: context, element, or step not ready');
+      console.error('🔊 ❌ Cannot play step audio: missing requirements');
       return;
     }
 
     // Get current step information
     const step = this.workoutSteps[this.currentStep];
+    console.log('🔊 Current step object:', JSON.stringify(step));
+
     if (!step) {
-      console.warn('Current step not found:', this.currentStep);
+      console.error('🔊 ❌ Current step not found at index:', this.currentStep);
       return;
     }
 
-    const duration = step.duration || 60; // Default to 60 seconds if not specified
-    const stepName = step.description || step.name || `Step ${this.currentStep + 1}`;
+    // Handle different step types - the parsed steps have duration as {value, unit}
+    let duration, stepName;
+    if (step.type === 'activity') {
+      // Extract duration from activity step
+      if (step.duration && typeof step.duration === 'object') {
+        const durationValue = step.duration.value;
+        const durationUnit = step.duration.unit;
+        duration = durationUnit === 'minutes' ? durationValue * 60 : durationValue;
+      } else {
+        duration = step.duration || 60;
+      }
+      stepName = step.activity || `Step ${this.currentStep + 1}`;
+    } else {
+      duration = 60;
+      stepName = `Step ${this.currentStep + 1}`;
+    }
 
-    console.log(`Playing silent audio for step: ${stepName} (${duration}s)`);
+    console.log(`🔊 Playing audio for: ${stepName} (${duration}s)`);
 
     // Revoke previous object URL to free memory
     if (this.currentObjectURL) {
