@@ -136,6 +136,28 @@ class DatabaseService {
       };
     });
   }
+
+  async deleteAllRuns() {
+    if (!this.db) {
+      throw new Error('Database not initialized');
+    }
+
+    return new Promise((resolve, reject) => {
+      const transaction = this.db.transaction(['runs'], 'readwrite');
+      const objectStore = transaction.objectStore('runs');
+      const request = objectStore.clear();
+
+      request.onsuccess = () => {
+        console.log('All runs deleted successfully');
+        resolve();
+      };
+
+      request.onerror = () => {
+        console.error('Error deleting all runs:', request.error);
+        reject(request.error);
+      };
+    });
+  }
 }
 
 // Export singleton instance

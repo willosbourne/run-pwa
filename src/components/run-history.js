@@ -121,6 +121,17 @@ class RunHistory extends HTMLElement {
           overflow: hidden;
           text-overflow: ellipsis;
         }
+
+        .clear-history-container {
+          margin-top: var(--spacing-xl);
+          padding-top: var(--spacing-lg);
+          border-top: 1px solid var(--secondary-color);
+          text-align: center;
+        }
+
+        .clear-history-container.hidden {
+          display: none;
+        }
       </style>
 
       <div class="container">
@@ -138,18 +149,60 @@ class RunHistory extends HTMLElement {
             <p>Loading runs...</p>
           </div>
         </div>
+
+        <div class="clear-history-container hidden" id="clearHistoryContainer">
+          <sl-button variant="danger" id="clearHistoryButton" outline>
+            <sl-icon name="trash" slot="prefix"></sl-icon>
+            Clear All History
+          </sl-button>
+        </div>
       </div>
+
+      <sl-dialog id="confirmDialog" label="Clear All History">
+        <p>Are you sure you want to delete all your run history? This action cannot be undone.</p>
+        <sl-button slot="footer" variant="default" id="cancelButton">Cancel</sl-button>
+        <sl-button slot="footer" variant="danger" id="confirmButton">Delete All</sl-button>
+      </sl-dialog>
     `;
   }
 
   setupEventListeners() {
     const refreshButton = this.shadowRoot.getElementById('refreshButton');
+    const clearHistoryButton = this.shadowRoot.getElementById('clearHistoryButton');
+    const confirmDialog = this.shadowRoot.getElementById('confirmDialog');
+    const cancelButton = this.shadowRoot.getElementById('cancelButton');
+    const confirmButton = this.shadowRoot.getElementById('confirmButton');
+
     refreshButton.addEventListener('click', () => this.loadRuns());
+
+    clearHistoryButton.addEventListener('click', () => {
+      confirmDialog.show();
+    });
+
+    cancelButton.addEventListener('click', () => {
+      confirmDialog.hide();
+    });
+
+    confirmButton.addEventListener('click', async () => {
+      await this.clearAllHistory();
+      confirmDialog.hide();
+    });
 
     // Listen for new runs being saved
     document.addEventListener('runSaved', () => {
       this.loadRuns();
     });
+  }
+
+  async clearAllHistory() {
+    try {
+      await databaseService.deleteAllRuns();
+      console.log('All history cleared');
+      await this.loadRuns();
+    } catch (error) {
+      console.error('Error clearing history:', error);
+      alert('Failed to clear history. Please try again.');
+    }
   }
 
   async loadRuns() {
@@ -164,6 +217,7 @@ class RunHistory extends HTMLElement {
 
   displayRuns() {
     const runsList = this.shadowRoot.getElementById('runsList');
+    const clearHistoryContainer = this.shadowRoot.getElementById('clearHistoryContainer');
 
     if (this.runs.length === 0) {
       runsList.innerHTML = `
@@ -173,6 +227,7 @@ class RunHistory extends HTMLElement {
           <p style="font-size: var(--font-size-sm);">Start a workout to record your first run!</p>
         </div>
       `;
+      clearHistoryContainer.classList.add('hidden');
       return;
     }
 
@@ -181,6 +236,9 @@ class RunHistory extends HTMLElement {
       const runItem = this.createRunItem(run);
       runsList.appendChild(runItem);
     });
+
+    // Show clear history button when there are runs
+    clearHistoryContainer.classList.remove('hidden');
   }
 
   createRunItem(run) {
