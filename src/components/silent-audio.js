@@ -125,8 +125,8 @@ class SilentAudio extends HTMLElement {
           console.error('Silent audio error:', e);
         });
 
-        // Set volume to 0 (silent)
-        this.audioElement.volume = 0;
+        // Set volume to 0.1 (10% - audible but quiet for testing)
+        this.audioElement.volume = 0.1;
       }
 
       // Create AudioContext if not already created (for generating audio data)
@@ -155,17 +155,21 @@ class SilentAudio extends HTMLElement {
   }
 
   /**
-   * Generate a silent audio buffer with the specified duration
+   * Generate an audio buffer with a gentle tone for the specified duration
+   * Using a low-volume, low-frequency tone so it's audible but not intrusive
    */
   generateSilentBuffer(durationSeconds) {
     const sampleRate = this.audioContext.sampleRate;
     const numSamples = sampleRate * durationSeconds;
     const buffer = this.audioContext.createBuffer(1, numSamples, sampleRate);
 
-    // The buffer is already filled with zeros (silence), but we can be explicit
     const channelData = buffer.getChannelData(0);
+    const frequency = 220; // A3 note - a gentle, low frequency
+    const volume = 0.05; // Very quiet - 5% volume
+
+    // Generate a sine wave tone
     for (let i = 0; i < numSamples; i++) {
-      channelData[i] = 0;
+      channelData[i] = Math.sin(2 * Math.PI * frequency * i / sampleRate) * volume;
     }
 
     return buffer;
@@ -198,27 +202,35 @@ class SilentAudio extends HTMLElement {
       this.currentObjectURL = null;
     }
 
-    // Generate silent audio buffer for this step's duration
+    // Generate audio buffer for this step's duration
+    console.log('Generating audio buffer...');
     const buffer = this.generateSilentBuffer(duration);
+    console.log(`Buffer created: ${buffer.length} samples, ${buffer.duration}s`);
 
     // Convert AudioBuffer to WAV blob
+    console.log('Converting buffer to WAV blob...');
     const wavBlob = this.audioBufferToWav(buffer);
+    console.log(`WAV blob created: ${wavBlob.size} bytes, type: ${wavBlob.type}`);
 
     // Create object URL for the blob
     this.currentObjectURL = URL.createObjectURL(wavBlob);
+    console.log(`Object URL created: ${this.currentObjectURL}`);
 
     // Set the audio element source and play
     this.audioElement.src = this.currentObjectURL;
 
     try {
+      console.log('About to call play() on audio element...');
       await this.audioElement.play();
       this.isPlaying = true;
-      console.log(`Silent audio playing for step: ${stepName}`);
+      console.log(`✅ Audio playing successfully for step: ${stepName} (${duration}s)`);
+      console.log(`Audio element state: paused=${this.audioElement.paused}, currentTime=${this.audioElement.currentTime}, duration=${this.audioElement.duration}`);
 
       // Update Media Session metadata
       this.updateMediaSession(stepName, duration);
     } catch (error) {
-      console.error('Error playing step audio:', error);
+      console.error('❌ Error playing step audio:', error);
+      console.error('Error details:', error.name, error.message);
       this.isPlaying = false;
     }
   }
