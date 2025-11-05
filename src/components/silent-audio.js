@@ -11,6 +11,7 @@ class SilentAudio extends HTMLElement {
     this.currentStep = null;
     this.workoutSteps = [];
     this.isPlaying = false;
+    this.currentObjectURL = null;
   }
 
   connectedCallback() {
@@ -29,6 +30,7 @@ class SilentAudio extends HTMLElement {
           display: none;
         }
       </style>
+      <audio id="silentAudio" preload="auto"></audio>
     `;
   }
 
@@ -74,9 +76,9 @@ class SilentAudio extends HTMLElement {
 
     // Handle visibility changes
     document.addEventListener('visibilitychange', () => {
-      if (!document.hidden && this.isPlaying && this.audioContext?.state === 'suspended') {
+      if (!document.hidden && this.isPlaying && this.audioElement?.paused) {
         console.log('Resuming audio after visibility change');
-        this.audioContext.resume().catch(e => {
+        this.audioElement.play().catch(e => {
           console.warn('Error resuming audio after visibility change:', e);
         });
       }
@@ -93,36 +95,54 @@ class SilentAudio extends HTMLElement {
     console.log(`Attempting to initialize audio (attempt ${this.initializationAttempts})`);
 
     try {
-      // Set up audio session for iOS
+      // Set up audio session for iOS - use mixWithOthers without duckOthers
+      // This allows the silent audio to play alongside music/podcasts without lowering their volume
       if (window.webkit?.messageHandlers?.audioSession) {
         console.log('Setting up iOS audio session');
         window.webkit.messageHandlers.audioSession.postMessage({
           category: 'playback',
-          options: ['mixWithOthers', 'duckOthers']
+          options: ['mixWithOthers']
         });
       }
 
-      // Create AudioContext if not already created
+      // Set up audio element if not already set up
+      if (!this.audioElement) {
+        this.audioElement = this.shadowRoot.getElementById('silentAudio');
+        this.audioElement.setAttribute('playsinline', '');
+        this.audioElement.setAttribute('webkit-playsinline', '');
+
+        // Set up audio element event listeners
+        this.audioElement.addEventListener('playing', () => {
+          console.log('Silent audio started playing');
+        });
+
+        this.audioElement.addEventListener('ended', () => {
+          console.log('Silent audio track ended');
+          // The workout-timer will trigger the next step
+        });
+
+        this.audioElement.addEventListener('error', (e) => {
+          console.error('Silent audio error:', e);
+        });
+
+        // Set volume to 0 (silent)
+        this.audioElement.volume = 0;
+      }
+
+      // Create AudioContext if not already created (for generating audio data)
       if (!this.audioContext) {
         this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
         console.log('AudioContext created');
       }
 
-      // Resume context if suspended (required by browser autoplay policies)
-      if (this.audioContext.state === 'suspended') {
-        await this.audioContext.resume();
-        console.log('AudioContext resumed');
-      }
-
       this.isInitialized = true;
-      this.isPlaying = true;
       console.log('Audio system initialized successfully');
 
       // Initialize Media Session API if available
       this.initializeMediaSession();
 
       // Start playing audio for the current step
-      this.playStepAudio();
+      await this.playStepAudio();
 
     } catch (error) {
       console.error('Error initializing audio:', error);
@@ -130,6 +150,7 @@ class SilentAudio extends HTMLElement {
       // If initialization fails, try again on next user interaction
       this.isInitialized = false;
       this.audioContext = null;
+      this.audioElement = null;
     }
   }
 
@@ -153,9 +174,9 @@ class SilentAudio extends HTMLElement {
   /**
    * Play audio for the current workout step
    */
-  playStepAudio() {
-    if (!this.audioContext || this.currentStep === null) {
-      console.log('Cannot play step audio: context or step not ready');
+  async playStepAudio() {
+    if (!this.audioContext || !this.audioElement || this.currentStep === null) {
+      console.log('Cannot play step audio: context, element, or step not ready');
       return;
     }
 
@@ -171,35 +192,114 @@ class SilentAudio extends HTMLElement {
 
     console.log(`Playing silent audio for step: ${stepName} (${duration}s)`);
 
-    // Stop current audio source if playing
-    if (this.audioSource) {
-      try {
-        this.audioSource.stop();
-        this.audioSource.disconnect();
-      } catch (e) {
-        // Ignore errors from already stopped sources
-      }
+    // Revoke previous object URL to free memory
+    if (this.currentObjectURL) {
+      URL.revokeObjectURL(this.currentObjectURL);
+      this.currentObjectURL = null;
     }
 
-    // Generate silent buffer for this step's duration
+    // Generate silent audio buffer for this step's duration
     const buffer = this.generateSilentBuffer(duration);
 
-    // Create buffer source
-    this.audioSource = this.audioContext.createBufferSource();
-    this.audioSource.buffer = buffer;
-    this.audioSource.connect(this.audioContext.destination);
+    // Convert AudioBuffer to WAV blob
+    const wavBlob = this.audioBufferToWav(buffer);
 
-    // Set up event for when this audio completes
-    this.audioSource.onended = () => {
-      console.log('Step audio completed');
-      // Note: The workout-timer will trigger the next step, which will call playStepAudio again
-    };
+    // Create object URL for the blob
+    this.currentObjectURL = URL.createObjectURL(wavBlob);
 
-    // Start playing
-    this.audioSource.start(0);
+    // Set the audio element source and play
+    this.audioElement.src = this.currentObjectURL;
 
-    // Update Media Session metadata
-    this.updateMediaSession(stepName, duration);
+    try {
+      await this.audioElement.play();
+      this.isPlaying = true;
+      console.log(`Silent audio playing for step: ${stepName}`);
+
+      // Update Media Session metadata
+      this.updateMediaSession(stepName, duration);
+    } catch (error) {
+      console.error('Error playing step audio:', error);
+      this.isPlaying = false;
+    }
+  }
+
+  /**
+   * Convert AudioBuffer to WAV blob
+   */
+  audioBufferToWav(buffer) {
+    const numberOfChannels = buffer.numberOfChannels;
+    const sampleRate = buffer.sampleRate;
+    const format = 1; // PCM
+    const bitDepth = 16;
+
+    const bytesPerSample = bitDepth / 8;
+    const blockAlign = numberOfChannels * bytesPerSample;
+
+    const data = this.interleave(buffer);
+    const dataLength = data.length * bytesPerSample;
+    const bufferLength = 44 + dataLength;
+
+    const arrayBuffer = new ArrayBuffer(bufferLength);
+    const view = new DataView(arrayBuffer);
+
+    // Write WAV header
+    this.writeString(view, 0, 'RIFF');
+    view.setUint32(4, 36 + dataLength, true);
+    this.writeString(view, 8, 'WAVE');
+    this.writeString(view, 12, 'fmt ');
+    view.setUint32(16, 16, true); // fmt chunk size
+    view.setUint16(20, format, true);
+    view.setUint16(22, numberOfChannels, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * blockAlign, true); // byte rate
+    view.setUint16(32, blockAlign, true);
+    view.setUint16(34, bitDepth, true);
+    this.writeString(view, 36, 'data');
+    view.setUint32(40, dataLength, true);
+
+    // Write audio data
+    this.floatTo16BitPCM(view, 44, data);
+
+    return new Blob([arrayBuffer], { type: 'audio/wav' });
+  }
+
+  /**
+   * Interleave channels (for WAV format)
+   */
+  interleave(buffer) {
+    if (buffer.numberOfChannels === 1) {
+      return buffer.getChannelData(0);
+    }
+
+    const length = buffer.length * buffer.numberOfChannels;
+    const result = new Float32Array(length);
+
+    let inputIndex = 0;
+    for (let i = 0; i < buffer.length; i++) {
+      for (let channel = 0; channel < buffer.numberOfChannels; channel++) {
+        result[inputIndex++] = buffer.getChannelData(channel)[i];
+      }
+    }
+    return result;
+  }
+
+  /**
+   * Write string to DataView
+   */
+  writeString(view, offset, string) {
+    for (let i = 0; i < string.length; i++) {
+      view.setUint8(offset + i, string.charCodeAt(i));
+    }
+  }
+
+  /**
+   * Convert float audio samples to 16-bit PCM
+   */
+  floatTo16BitPCM(view, offset, input) {
+    for (let i = 0; i < input.length; i++, offset += 2) {
+      const s = Math.max(-1, Math.min(1, input[i]));
+      view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+    }
   }
 
   /**
@@ -248,15 +348,21 @@ class SilentAudio extends HTMLElement {
   stopAudio() {
     console.log('Stopping audio');
 
-    // Stop current audio source
-    if (this.audioSource) {
+    // Stop and clear audio element
+    if (this.audioElement) {
       try {
-        this.audioSource.stop();
-        this.audioSource.disconnect();
+        this.audioElement.pause();
+        this.audioElement.currentTime = 0;
+        this.audioElement.src = '';
       } catch (e) {
-        // Ignore errors from already stopped sources
+        console.warn('Error stopping audio element:', e);
       }
-      this.audioSource = null;
+    }
+
+    // Revoke object URL to free memory
+    if (this.currentObjectURL) {
+      URL.revokeObjectURL(this.currentObjectURL);
+      this.currentObjectURL = null;
     }
 
     // Close audio context
