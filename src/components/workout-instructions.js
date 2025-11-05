@@ -43,10 +43,20 @@ class WorkoutInstructions extends HTMLElement {
           gap: var(--spacing-md);
           margin-bottom: var(--spacing-md);
         }
-        
+
+        .workout-input sl-button {
+          width: 100%;
+        }
+
         @media (min-width: 768px) {
           .workout-input {
             flex-direction: row;
+            flex-wrap: wrap;
+            align-items: center;
+          }
+
+          .workout-input sl-button {
+            width: auto;
           }
         }
         
@@ -68,14 +78,15 @@ class WorkoutInstructions extends HTMLElement {
       
       <div class="container">
         <div class="workout-input">
-          <sl-input 
-            id="workoutText" 
+          <sl-input
+            id="workoutText"
             placeholder="Enter workout instructions (e.g., 'Jog for 60s, walk for 90s, repeat for 20 minutes')"
             style="flex: 1;"
           ></sl-input>
           <sl-button variant="primary" id="parseButton">Parse Instructions</sl-button>
+          <sl-button variant="default" id="testButton">Use Test Instructions</sl-button>
         </div>
-        
+
         <div class="workout-display" id="workoutDisplay">
           <h3>Workout Plan</h3>
           <div id="workoutSteps"></div>
@@ -86,11 +97,24 @@ class WorkoutInstructions extends HTMLElement {
 
   setupEventListeners() {
     const parseButton = this.shadowRoot.getElementById('parseButton');
+    const testButton = this.shadowRoot.getElementById('testButton');
     const workoutText = this.shadowRoot.getElementById('workoutText');
-    
+
     parseButton.addEventListener('click', () => {
       const instructions = workoutText.value;
       const parsedWorkout = this.parseInstructions(instructions);
+      this.displayWorkout(parsedWorkout);
+      this.dispatchEvent(new CustomEvent('workoutParsed', {
+        detail: { steps: parsedWorkout },
+        bubbles: true,
+        composed: true
+      }));
+    });
+
+    testButton.addEventListener('click', () => {
+      const testInstructions = 'Jog for 30s, walk for 15s, repeat 4 times';
+      workoutText.value = testInstructions;
+      const parsedWorkout = this.parseInstructions(testInstructions);
       this.displayWorkout(parsedWorkout);
       this.dispatchEvent(new CustomEvent('workoutParsed', {
         detail: { steps: parsedWorkout },
