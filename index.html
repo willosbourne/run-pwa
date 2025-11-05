@@ -56,6 +56,10 @@
             <div id="historyView" class="view">
                 <run-history></run-history>
             </div>
+
+            <div id="reportView" class="view">
+                <run-report></run-report>
+            </div>
         </main>
 
         <footer>
@@ -69,6 +73,7 @@
     <script type="module" src="/src/components/silent-audio.js"></script>
     <script type="module" src="/src/components/location-tracker.js"></script>
     <script type="module" src="/src/components/run-history.js"></script>
+    <script type="module" src="/src/components/run-report.js"></script>
 
     <!-- Service Worker Registration -->
     <script type="module" src="/src/services/register-sw.js"></script>
@@ -83,10 +88,13 @@
             const historyViewBtn = document.getElementById('historyViewBtn');
             const workoutView = document.getElementById('workoutView');
             const historyView = document.getElementById('historyView');
+            const reportView = document.getElementById('reportView');
+            const runReport = document.querySelector('run-report');
 
             function showWorkoutView() {
                 workoutView.classList.add('active');
                 historyView.classList.remove('active');
+                reportView.classList.remove('active');
                 workoutViewBtn.variant = 'primary';
                 historyViewBtn.variant = 'default';
             }
@@ -94,12 +102,39 @@
             function showHistoryView() {
                 historyView.classList.add('active');
                 workoutView.classList.remove('active');
+                reportView.classList.remove('active');
                 historyViewBtn.variant = 'primary';
                 workoutViewBtn.variant = 'default';
             }
 
+            function showReportView(runData) {
+                reportView.classList.add('active');
+                workoutView.classList.remove('active');
+                historyView.classList.remove('active');
+                workoutViewBtn.variant = 'default';
+                historyViewBtn.variant = 'default';
+
+                // Set the run data in the report component
+                if (runData) {
+                    runReport.setRunData(runData);
+                }
+            }
+
             workoutViewBtn.addEventListener('click', showWorkoutView);
             historyViewBtn.addEventListener('click', showHistoryView);
+
+            // Listen for run selection from history
+            document.addEventListener('runSelected', (event) => {
+                showReportView(event.detail.run);
+            });
+
+            // Listen for navigate back from report
+            document.addEventListener('navigateBack', () => {
+                showHistoryView();
+            });
+
+            // Expose function globally for other components to use
+            window.showReportView = showReportView;
         });
     </script>
 </body>
