@@ -101,73 +101,232 @@ class WorkoutInstructions extends HTMLElement {
   }
 
   parseInstructions(instructions) {
-    // Basic parsing logic - this will be expanded
     const steps = [];
-    const parts = instructions.toLowerCase().split(',');
-    
+    const parts = this.splitInstructions(instructions);
+    let stepsToRepeat = [];
+
     parts.forEach(part => {
-      if (part.includes('repeat')) {
-        // Handle repeat instruction
-        const duration = this.extractDuration(part);
-        if (duration) {
-          steps.push({
-            type: 'repeat',
-            duration: duration
-          });
+      const cleanPart = part.trim().toLowerCase();
+
+      if (this.isRepeatInstruction(cleanPart)) {
+        // Handle different types of repeat instructions
+        const repeatInfo = this.parseRepeatInstruction(cleanPart);
+        if (repeatInfo) {
+          if (repeatInfo.type === 'count') {
+            // "Repeat X times" - repeat the accumulated steps X times
+            steps.push({
+              type: 'repeat-count',
+              count: repeatInfo.count,
+              stepsToRepeat: [...stepsToRepeat]
+            });
+            stepsToRepeat = [];
+          } else if (repeatInfo.type === 'duration') {
+            // "Repeat for X minutes" - repeat until duration is met
+            steps.push({
+              type: 'repeat-duration',
+              duration: repeatInfo.duration,
+              stepsToRepeat: [...stepsToRepeat]
+            });
+            stepsToRepeat = [];
+          }
         }
       } else {
-        // Handle regular steps
-        const duration = this.extractDuration(part);
-        const activity = part.replace(/\d+\s*(m|min|s|sec|seconds?|minutes?)/g, '').trim();
-        
-        if (duration && activity) {
-          steps.push({
+        // Handle regular activity steps
+        const stepInfo = this.parseActivityStep(cleanPart);
+        if (stepInfo) {
+          const step = {
             type: 'activity',
-            activity: activity,
-            duration: duration
-          });
+            activity: stepInfo.activity,
+            duration: stepInfo.duration
+          };
+          steps.push(step);
+          stepsToRepeat.push(step);
         }
       }
     });
-    
+
     return steps;
   }
 
-  extractDuration(text) {
-    const timeRegex = /(\d+)\s*(m|min|s|sec|seconds?|minutes?)/;
-    const match = text.match(timeRegex);
-    
-    if (match) {
-      const value = parseInt(match[1]);
-      const unit = match[2].startsWith('m') ? 'minutes' : 'seconds';
-      return { value, unit };
+  splitInstructions(instructions) {
+    // Split by commas, periods, "then", "and" while preserving the context
+    return instructions.split(/[,.]|\s+(?:then|and)\s+/i)
+      .map(s => s.trim())
+      .filter(s => s.length > 0);
+  }
+
+  isRepeatInstruction(text) {
+    return /repeat|again/i.test(text);
+  }
+
+  parseRepeatInstruction(text) {
+    // Check for "repeat X times" pattern
+    const countMatch = text.match(/(repeat|do|again)\s+(\d+)\s*(?:x|times?)/i);
+    if (countMatch) {
+      return {
+        type: 'count',
+        count: parseInt(countMatch[2])
+      };
     }
-    
+
+    // Check for "repeat for X minutes/seconds" pattern
+    const durationMatch = text.match(/(repeat|do|again)\s+(?:for\s+)?(\d+)\s*(m|min|minutes?|s|sec|seconds?)/i);
+    if (durationMatch) {
+      const value = parseInt(durationMatch[2]);
+      const unit = durationMatch[3].toLowerCase().startsWith('m') ? 'minutes' : 'seconds';
+      return {
+        type: 'duration',
+        duration: { value, unit }
+      };
+    }
+
+    // Default to single repeat if just "repeat" is mentioned
+    if (/repeat|again/i.test(text)) {
+      return {
+        type: 'count',
+        count: 2
+      };
+    }
+
+    return null;
+  }
+
+  parseActivityStep(text) {
+    const duration = this.extractDuration(text);
+    if (!duration) return null;
+
+    // Extract activity name more intelligently
+    const activity = this.extractActivity(text);
+    if (!activity) return null;
+
+    return { activity, duration };
+  }
+
+  extractDuration(text) {
+    // Improved regex to handle more duration formats
+    const patterns = [
+      // "60 seconds", "2 minutes", "1 min", "30s"
+      /(\d+)\s*(m|min|minutes?|s|sec|seconds?)(?:\s|$)/i,
+      // "for 60s", "for 2 min"
+      /for\s+(\d+)\s*(m|min|minutes?|s|sec|seconds?)/i,
+      // "1:30" (1 minute 30 seconds)
+      /(\d+):(\d{2})/
+    ];
+
+    for (const pattern of patterns) {
+      const match = text.match(pattern);
+      if (match) {
+        if (match[0].includes(':')) {
+          // Handle MM:SS format
+          const minutes = parseInt(match[1]);
+          const seconds = parseInt(match[2]);
+          const totalSeconds = minutes * 60 + seconds;
+          return { value: totalSeconds, unit: 'seconds' };
+        } else {
+          const value = parseInt(match[1]);
+          const unitStr = match[2] || 's';
+          const unit = unitStr.toLowerCase().startsWith('m') ? 'minutes' : 'seconds';
+          return { value, unit };
+        }
+      }
+    }
+
+    return null;
+  }
+
+  extractActivity(text) {
+    // Remove duration patterns and clean up the activity name
+    let activity = text
+      // Remove duration patterns
+      .replace(/\d+:\d{2}/g, '')
+      .replace(/for\s+\d+\s*(m|min|minutes?|s|sec|seconds?)/gi, '')
+      .replace(/\d+\s*(m|min|minutes?|s|sec|seconds?)/gi, '')
+      // Remove "for" at the end
+      .replace(/\s+for\s*$/i, '')
+      // Clean up extra spaces
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    // Common activity mappings
+    const activityMap = {
+      'run': 'Run',
+      'jog': 'Jog',
+      'walk': 'Walk',
+      'sprint': 'Sprint',
+      'rest': 'Rest',
+      'recover': 'Recover',
+      'warm up': 'Warm up',
+      'warmup': 'Warm up',
+      'cool down': 'Cool down',
+      'cooldown': 'Cool down',
+      'easy': 'Easy pace',
+      'moderate': 'Moderate pace',
+      'hard': 'Hard pace',
+      'fast': 'Fast pace'
+    };
+
+    // Check if we have a known activity
+    const lowerActivity = activity.toLowerCase();
+    for (const [key, value] of Object.entries(activityMap)) {
+      if (lowerActivity.includes(key)) {
+        return value;
+      }
+    }
+
+    // If not found in map, capitalize first letter of each word
+    if (activity) {
+      return activity.split(' ')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ');
+    }
+
     return null;
   }
 
   displayWorkout(steps) {
     const workoutSteps = this.shadowRoot.getElementById('workoutSteps');
     workoutSteps.innerHTML = '';
-    
+
     steps.forEach((step, index) => {
       const stepElement = document.createElement('div');
       stepElement.className = 'workout-step';
-      
+
       if (step.type === 'activity') {
+        const durationStr = this.formatDuration(step.duration);
         stepElement.innerHTML = `
           <sl-icon name="arrow-right-circle"></sl-icon>
-          <span>${step.activity} for ${step.duration.value} ${step.duration.unit}</span>
+          <span>${step.activity} for ${durationStr}</span>
         `;
-      } else if (step.type === 'repeat') {
+      } else if (step.type === 'repeat-count') {
+        const stepsStr = step.stepsToRepeat.length === 1 ? 'step' : 'steps';
         stepElement.innerHTML = `
           <sl-icon name="arrow-repeat"></sl-icon>
-          <span>Repeat previous steps for ${step.duration.value} ${step.duration.unit}</span>
+          <span>Repeat previous ${step.stepsToRepeat.length} ${stepsStr} ${step.count} times</span>
+        `;
+      } else if (step.type === 'repeat-duration') {
+        const durationStr = this.formatDuration(step.duration);
+        const stepsStr = step.stepsToRepeat.length === 1 ? 'step' : 'steps';
+        stepElement.innerHTML = `
+          <sl-icon name="arrow-repeat"></sl-icon>
+          <span>Repeat previous ${step.stepsToRepeat.length} ${stepsStr} for ${durationStr}</span>
         `;
       }
-      
+
       workoutSteps.appendChild(stepElement);
     });
+  }
+
+  formatDuration(duration) {
+    if (duration.unit === 'seconds' && duration.value >= 60) {
+      const minutes = Math.floor(duration.value / 60);
+      const seconds = duration.value % 60;
+      if (seconds === 0) {
+        return `${minutes} minute${minutes !== 1 ? 's' : ''}`;
+      } else {
+        return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+      }
+    }
+    return `${duration.value} ${duration.unit}`;
   }
 }
 
