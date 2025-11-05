@@ -15,7 +15,6 @@ class SilentAudio extends HTMLElement {
   }
 
   connectedCallback() {
-    console.log('🔊 SilentAudio component connected');
     this.render();
     this.setupEventListeners();
   }
@@ -36,35 +35,25 @@ class SilentAudio extends HTMLElement {
   }
 
   setupEventListeners() {
-    console.log('🔊 Setting up silent-audio event listeners');
-
     // Listen for workout parsed to get all steps
     document.addEventListener('workoutParsed', (event) => {
-      console.log('🔊 Workout parsed event received, steps:', event.detail.steps);
       this.workoutSteps = event.detail.steps || [];
-      console.log('🔊 Stored workout steps:', this.workoutSteps);
     });
 
     // Listen for the start of a workout
     document.addEventListener('workoutStarted', async () => {
-      console.log('🔊 ✅ WORKOUT STARTED EVENT RECEIVED!');
-      console.log('🔊 Current workout steps:', this.workoutSteps);
       this.currentStep = 0;
-      console.log('🔊 Set currentStep to 0');
 
       if (this.isInitialized) {
-        console.log('🔊 Already initialized, starting audio playback directly');
         this.isPlaying = true;
         await this.playStepAudio();
       } else {
-        console.log('🔊 Not initialized yet, attempting initialization...');
         await this.attemptInitializeAudio();
       }
     });
 
     // Listen for step changes
     document.addEventListener('workoutStepChanged', (event) => {
-      console.log('Workout step changed event received', event.detail);
       this.currentStep = event.detail.stepIndex;
       if (this.isInitialized && this.isPlaying) {
         this.playStepAudio();
@@ -73,7 +62,6 @@ class SilentAudio extends HTMLElement {
 
     // Listen for workout stopped
     document.addEventListener('workoutStopped', () => {
-      console.log('Workout stopped event received');
       this.stopAudio();
     });
 
@@ -81,7 +69,6 @@ class SilentAudio extends HTMLElement {
     const userInteractionEvents = ['click', 'touchstart', 'keydown'];
     userInteractionEvents.forEach(eventType => {
       document.addEventListener(eventType, () => {
-        console.log(`User interaction (${eventType}) received`);
         this.attemptInitializeAudio();
       }, { once: true });
     });
@@ -89,7 +76,6 @@ class SilentAudio extends HTMLElement {
     // Handle visibility changes
     document.addEventListener('visibilitychange', () => {
       if (!document.hidden && this.isPlaying && this.audioElement?.paused) {
-        console.log('Resuming audio after visibility change');
         this.audioElement.play().catch(e => {
           console.warn('Error resuming audio after visibility change:', e);
         });
@@ -99,18 +85,15 @@ class SilentAudio extends HTMLElement {
 
   async attemptInitializeAudio() {
     if (this.isInitialized || this.initializationAttempts >= this.maxAttempts) {
-      console.log(`Skipping audio initialization: isInitialized=${this.isInitialized}, attempts=${this.initializationAttempts}`);
       return;
     }
 
     this.initializationAttempts++;
-    console.log(`Attempting to initialize audio (attempt ${this.initializationAttempts})`);
 
     try {
       // Set up audio session for iOS - use mixWithOthers without duckOthers
       // This allows the silent audio to play alongside music/podcasts without lowering their volume
       if (window.webkit?.messageHandlers?.audioSession) {
-        console.log('Setting up iOS audio session');
         window.webkit.messageHandlers.audioSession.postMessage({
           category: 'playback',
           options: ['mixWithOthers']
@@ -123,49 +106,27 @@ class SilentAudio extends HTMLElement {
         this.audioElement.setAttribute('playsinline', '');
         this.audioElement.setAttribute('webkit-playsinline', '');
 
-        // Set up audio element event listeners
-        this.audioElement.addEventListener('playing', () => {
-          console.log('Silent audio started playing');
-        });
-
-        this.audioElement.addEventListener('ended', () => {
-          console.log('Silent audio track ended');
-          // The workout-timer will trigger the next step
-        });
-
-        this.audioElement.addEventListener('error', (e) => {
-          console.error('Silent audio error:', e);
-        });
-
-        // Set volume to 0.1 (10% - audible but quiet for testing)
-        this.audioElement.volume = 0.1;
+        // Set volume to 0 (silent)
+        this.audioElement.volume = 0;
       }
 
       // Create AudioContext if not already created (for generating audio data)
       if (!this.audioContext) {
         this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        console.log('AudioContext created');
       }
 
       this.isInitialized = true;
-      console.log('Audio system initialized successfully');
 
       // Initialize Media Session API if available
       this.initializeMediaSession();
 
       // Only start playing audio if we have a valid current step
-      // (i.e., if this was called from workoutStarted, not just from user interaction)
       if (this.currentStep !== null) {
-        console.log('🔊 Current step is set, starting audio playback');
         await this.playStepAudio();
-      } else {
-        console.log('🔊 No current step yet, waiting for workout to start');
       }
 
     } catch (error) {
       console.error('Error initializing audio:', error);
-
-      // If initialization fails, try again on next user interaction
       this.isInitialized = false;
       this.audioContext = null;
       this.audioElement = null;
@@ -173,22 +134,15 @@ class SilentAudio extends HTMLElement {
   }
 
   /**
-   * Generate an audio buffer with a gentle tone for the specified duration
-   * Using a low-volume, low-frequency tone so it's audible but not intrusive
+   * Generate a silent audio buffer with the specified duration
    */
   generateSilentBuffer(durationSeconds) {
     const sampleRate = this.audioContext.sampleRate;
     const numSamples = sampleRate * durationSeconds;
     const buffer = this.audioContext.createBuffer(1, numSamples, sampleRate);
 
-    const channelData = buffer.getChannelData(0);
-    const frequency = 220; // A3 note - a gentle, low frequency
-    const volume = 0.05; // Very quiet - 5% volume
-
-    // Generate a sine wave tone
-    for (let i = 0; i < numSamples; i++) {
-      channelData[i] = Math.sin(2 * Math.PI * frequency * i / sampleRate) * volume;
-    }
+    // The buffer is already filled with zeros (silence) by default
+    // No need to explicitly set values
 
     return buffer;
   }
@@ -197,23 +151,13 @@ class SilentAudio extends HTMLElement {
    * Play audio for the current workout step
    */
   async playStepAudio() {
-    console.log('🔊 playStepAudio called');
-    console.log('🔊 audioContext exists:', !!this.audioContext);
-    console.log('🔊 audioElement exists:', !!this.audioElement);
-    console.log('🔊 currentStep:', this.currentStep);
-    console.log('🔊 workoutSteps length:', this.workoutSteps.length);
-
     if (!this.audioContext || !this.audioElement || this.currentStep === null) {
-      console.error('🔊 ❌ Cannot play step audio: missing requirements');
       return;
     }
 
     // Get current step information
     const step = this.workoutSteps[this.currentStep];
-    console.log('🔊 Current step object:', JSON.stringify(step));
-
     if (!step) {
-      console.error('🔊 ❌ Current step not found at index:', this.currentStep);
       return;
     }
 
@@ -234,43 +178,32 @@ class SilentAudio extends HTMLElement {
       stepName = `Step ${this.currentStep + 1}`;
     }
 
-    console.log(`🔊 Playing audio for: ${stepName} (${duration}s)`);
-
     // Revoke previous object URL to free memory
     if (this.currentObjectURL) {
       URL.revokeObjectURL(this.currentObjectURL);
       this.currentObjectURL = null;
     }
 
-    // Generate audio buffer for this step's duration
-    console.log('Generating audio buffer...');
+    // Generate silent audio buffer for this step's duration
     const buffer = this.generateSilentBuffer(duration);
-    console.log(`Buffer created: ${buffer.length} samples, ${buffer.duration}s`);
 
     // Convert AudioBuffer to WAV blob
-    console.log('Converting buffer to WAV blob...');
     const wavBlob = this.audioBufferToWav(buffer);
-    console.log(`WAV blob created: ${wavBlob.size} bytes, type: ${wavBlob.type}`);
 
     // Create object URL for the blob
     this.currentObjectURL = URL.createObjectURL(wavBlob);
-    console.log(`Object URL created: ${this.currentObjectURL}`);
 
     // Set the audio element source and play
     this.audioElement.src = this.currentObjectURL;
 
     try {
-      console.log('About to call play() on audio element...');
       await this.audioElement.play();
       this.isPlaying = true;
-      console.log(`✅ Audio playing successfully for step: ${stepName} (${duration}s)`);
-      console.log(`Audio element state: paused=${this.audioElement.paused}, currentTime=${this.audioElement.currentTime}, duration=${this.audioElement.duration}`);
 
       // Update Media Session metadata
       this.updateMediaSession(stepName, duration);
     } catch (error) {
-      console.error('❌ Error playing step audio:', error);
-      console.error('Error details:', error.name, error.message);
+      console.error('Error playing step audio:', error);
       this.isPlaying = false;
     }
   }
@@ -359,7 +292,6 @@ class SilentAudio extends HTMLElement {
    */
   initializeMediaSession() {
     if (!('mediaSession' in navigator)) {
-      console.log('Media Session API not supported');
       return;
     }
 
@@ -369,8 +301,6 @@ class SilentAudio extends HTMLElement {
         artist: 'Run PWA',
         album: 'Workout',
       });
-
-      console.log('Media Session initialized');
     } catch (error) {
       console.warn('Error initializing Media Session:', error);
     }
@@ -390,15 +320,12 @@ class SilentAudio extends HTMLElement {
         artist: 'Run PWA',
         album: 'Workout',
       });
-
-      console.log(`Media Session updated: ${stepName} (${duration}s)`);
     } catch (error) {
       console.warn('Error updating Media Session:', error);
     }
   }
 
   stopAudio() {
-    console.log('Stopping audio');
 
     // Stop and clear audio element
     if (this.audioElement) {
