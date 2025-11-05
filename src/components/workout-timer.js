@@ -8,6 +8,8 @@ class WorkoutTimer extends HTMLElement {
     this.workoutSteps = [];
     this.wakeLock = null;
     this.wakeLockEnabled = true;
+    this.workoutStartTime = null;
+    this.totalElapsedTime = 0;
   }
 
   connectedCallback() {
@@ -226,6 +228,10 @@ class WorkoutTimer extends HTMLElement {
       await this.requestWakeLock();
     }
 
+    // Record workout start time
+    this.workoutStartTime = Date.now();
+    this.totalElapsedTime = 0;
+
     // Dispatch workoutStarted event
     document.dispatchEvent(new CustomEvent('workoutStarted'));
 
@@ -413,6 +419,11 @@ class WorkoutTimer extends HTMLElement {
       document.removeEventListener('visibilitychange', this.handleVisibilityChangeBound);
     }
 
+    // Calculate total elapsed time
+    if (this.workoutStartTime) {
+      this.totalElapsedTime = Math.floor((Date.now() - this.workoutStartTime) / 1000);
+    }
+
     // Release wake lock when workout stops
     if (this.wakeLock) {
       try {
@@ -424,8 +435,62 @@ class WorkoutTimer extends HTMLElement {
       }
     }
 
+    // Get location data from location-tracker
+    const locationTracker = document.querySelector('location-tracker');
+    const workoutData = {
+      totalDuration: this.totalElapsedTime,
+      totalDistance: 0,
+      stepDistances: [],
+      locations: []
+    };
+
+    if (locationTracker) {
+      // Get total distance from location tracker
+      const totalDistanceElement = locationTracker.shadowRoot.getElementById('totalDistance');
+      if (totalDistanceElement) {
+        workoutData.totalDistance = parseFloat(totalDistanceElement.textContent) || 0;
+      }
+
+      // Get locations array
+      if (locationTracker.locations) {
+        workoutData.locations = locationTracker.locations;
+      }
+
+      // Calculate step distances
+      const stepLocations = {};
+      workoutData.locations.forEach(location => {
+        if (!stepLocations[location.stepIndex]) {
+          stepLocations[location.stepIndex] = [];
+        }
+        stepLocations[location.stepIndex].push(location);
+      });
+
+      Object.entries(stepLocations).forEach(([stepIndex, locations]) => {
+        let stepDistance = 0;
+        for (let i = 1; i < locations.length; i++) {
+          const prev = locations[i - 1];
+          const curr = locations[i];
+          stepDistance += this.calculateDistance(
+            prev.latitude,
+            prev.longitude,
+            curr.latitude,
+            curr.longitude
+          );
+        }
+        workoutData.stepDistances.push({
+          stepIndex: parseInt(stepIndex),
+          distance: stepDistance
+        });
+      });
+    }
+
     // Dispatch workout stopped event
     document.dispatchEvent(new CustomEvent('workoutStopped'));
+
+    // Dispatch workout completed event with data
+    document.dispatchEvent(new CustomEvent('workoutCompleted', {
+      detail: workoutData
+    }));
 
     const startButton = this.shadowRoot.getElementById('startButton');
     const pauseButton = this.shadowRoot.getElementById('pauseButton');
@@ -465,6 +530,22 @@ class WorkoutTimer extends HTMLElement {
     if (navigator.vibrate) {
       navigator.vibrate([300, 100, 300, 100, 300]); // Triple vibration for completion
     }
+  }
+
+  calculateDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371; // Earth's radius in kilometers
+    const dLat = this.toRad(lat2 - lat1);
+    const dLon = this.toRad(lon2 - lon1);
+    const a =
+      Math.sin(dLat/2) * Math.sin(dLat/2) +
+      Math.cos(this.toRad(lat1)) * Math.cos(this.toRad(lat2)) *
+      Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+  }
+
+  toRad(degrees) {
+    return degrees * (Math.PI / 180);
   }
 }
 
