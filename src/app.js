@@ -82,10 +82,18 @@ class RunApp {
       const id = await databaseService.saveRun(runData);
       console.log('Run data saved with id:', id);
 
+      // Add the id to runData for display
+      runData.id = id;
+
       // Dispatch event to notify other components
       document.dispatchEvent(new CustomEvent('runSaved', {
         detail: { id, runData }
       }));
+
+      // Show the run report immediately after saving
+      if (window.showReportView) {
+        window.showReportView(runData);
+      }
     } catch (error) {
       console.error('Failed to save run data:', error);
     }
