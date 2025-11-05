@@ -46,12 +46,20 @@ class SilentAudio extends HTMLElement {
     });
 
     // Listen for the start of a workout
-    document.addEventListener('workoutStarted', () => {
+    document.addEventListener('workoutStarted', async () => {
       console.log('🔊 ✅ WORKOUT STARTED EVENT RECEIVED!');
       console.log('🔊 Current workout steps:', this.workoutSteps);
       this.currentStep = 0;
-      console.log('🔊 About to attempt audio initialization...');
-      this.attemptInitializeAudio();
+      console.log('🔊 Set currentStep to 0');
+
+      if (this.isInitialized) {
+        console.log('🔊 Already initialized, starting audio playback directly');
+        this.isPlaying = true;
+        await this.playStepAudio();
+      } else {
+        console.log('🔊 Not initialized yet, attempting initialization...');
+        await this.attemptInitializeAudio();
+      }
     });
 
     // Listen for step changes
@@ -145,8 +153,14 @@ class SilentAudio extends HTMLElement {
       // Initialize Media Session API if available
       this.initializeMediaSession();
 
-      // Start playing audio for the current step
-      await this.playStepAudio();
+      // Only start playing audio if we have a valid current step
+      // (i.e., if this was called from workoutStarted, not just from user interaction)
+      if (this.currentStep !== null) {
+        console.log('🔊 Current step is set, starting audio playback');
+        await this.playStepAudio();
+      } else {
+        console.log('🔊 No current step yet, waiting for workout to start');
+      }
 
     } catch (error) {
       console.error('Error initializing audio:', error);
