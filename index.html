@@ -31,15 +31,33 @@
     <div id="app">
         <header>
             <h1>Run PWA</h1>
+            <nav class="main-nav">
+                <sl-button-group>
+                    <sl-button id="workoutViewBtn" variant="primary">
+                        <sl-icon name="play-circle" slot="prefix"></sl-icon>
+                        Workout
+                    </sl-button>
+                    <sl-button id="historyViewBtn" variant="default">
+                        <sl-icon name="clock-history" slot="prefix"></sl-icon>
+                        History
+                    </sl-button>
+                </sl-button-group>
+            </nav>
         </header>
-        
+
         <main>
-            <workout-instructions></workout-instructions>
-            <workout-timer></workout-timer>
-            <location-tracker></location-tracker>
-            <silent-audio></silent-audio>
+            <div id="workoutView" class="view active">
+                <workout-instructions></workout-instructions>
+                <workout-timer></workout-timer>
+                <location-tracker></location-tracker>
+                <silent-audio></silent-audio>
+            </div>
+
+            <div id="historyView" class="view">
+                <run-history></run-history>
+            </div>
         </main>
-        
+
         <footer>
             <p>© 2025 Run PWA</p>
         </footer>
@@ -50,11 +68,39 @@
     <script type="module" src="/src/components/workout-timer.js"></script>
     <script type="module" src="/src/components/silent-audio.js"></script>
     <script type="module" src="/src/components/location-tracker.js"></script>
+    <script type="module" src="/src/components/run-history.js"></script>
 
     <!-- Service Worker Registration -->
     <script type="module" src="/src/services/register-sw.js"></script>
-    
+
     <!-- Main App -->
     <script type="module" src="/src/app.js"></script>
+
+    <!-- Navigation Script -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const workoutViewBtn = document.getElementById('workoutViewBtn');
+            const historyViewBtn = document.getElementById('historyViewBtn');
+            const workoutView = document.getElementById('workoutView');
+            const historyView = document.getElementById('historyView');
+
+            function showWorkoutView() {
+                workoutView.classList.add('active');
+                historyView.classList.remove('active');
+                workoutViewBtn.variant = 'primary';
+                historyViewBtn.variant = 'default';
+            }
+
+            function showHistoryView() {
+                historyView.classList.add('active');
+                workoutView.classList.remove('active');
+                historyViewBtn.variant = 'primary';
+                workoutViewBtn.variant = 'default';
+            }
+
+            workoutViewBtn.addEventListener('click', showWorkoutView);
+            historyViewBtn.addEventListener('click', showHistoryView);
+        });
+    </script>
 </body>
 </html> 

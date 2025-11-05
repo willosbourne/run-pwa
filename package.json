@@ -4,13 +4,18 @@
   "description": "A Progressive Web App for tracking and improving your running experience",
   "main": "index.js",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --host",
     "build": "vite build",
     "preview": "vite preview",
     "lint": "eslint src/**/*.js",
     "test": "jest"
   },
-  "keywords": ["pwa", "running", "fitness", "web-components"],
+  "keywords": [
+    "pwa",
+    "running",
+    "fitness",
+    "web-components"
+  ],
   "author": "",
   "license": "MIT",
   "devDependencies": {
@@ -21,4 +26,4 @@
   "dependencies": {
     "@shoelace-style/shoelace": "^2.4.0"
   }
-} 
+}
